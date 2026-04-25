@@ -1,0 +1,60 @@
+# Alert rules for vLLM TurboQuantum monitoring
+groups:
+  - name: vllm_alerts
+    interval: 30s
+    rules:
+      # High GPU Memory
+      - alert: HighGPUMemory
+        expr: vllm_gpu_memory_percent > 90
+        for: 2m
+        annotations:
+          summary: "High GPU memory usage on {{ $labels.instance }}"
+          description: "GPU memory usage is {{ $value }}% on {{ $labels.instance }}"
+      
+      # GPU Temperature
+      - alert: HighGPUTemperature
+        expr: vllm_gpu_temperature_c > 85
+        for: 5m
+        annotations:
+          summary: "High GPU temperature on {{ $labels.instance }}"
+          description: "GPU temperature is {{ $value }}°C on {{ $labels.instance }}"
+      
+      # Low Throughput
+      - alert: LowThroughput
+        expr: vllm_throughput_prompt_per_sec < 5
+        for: 5m
+        annotations:
+          summary: "Low inference throughput on {{ $labels.instance }}"
+          description: "Throughput dropped to {{ $value }} prompt/sec"
+      
+      # High Latency
+      - alert: HighLatency
+        expr: vllm_latency_ms_p95 > 1000
+        for: 5m
+        annotations:
+          summary: "High inference latency on {{ $labels.instance }}"
+          description: "P95 latency is {{ $value }}ms on {{ $labels.instance }}"
+      
+      # Service Down
+      - alert: VLLMServiceDown
+        expr: up{job="vllm-api"} == 0
+        for: 1m
+        annotations:
+          summary: "vLLM service is down on {{ $labels.instance }}"
+          description: "vLLM API has been down for more than 1 minute"
+      
+      # High Request Queue
+      - alert: HighRequestQueue
+        expr: vllm_request_queue_length > 100
+        for: 2m
+        annotations:
+          summary: "High request queue on {{ $labels.instance }}"
+          description: "Request queue has {{ $value }} items"
+      
+      # KV Cache Compression Not Working
+      - alert: TurboQuantumIssue
+        expr: vllm_turboquant_enabled == 0 and vllm_kv_cache_dtype == "float16"
+        for: 1m
+        annotations:
+          summary: "TurboQuantum not active on {{ $labels.instance }}"
+          description: "TurboQuantum compression is disabled, KV cache not optimized"

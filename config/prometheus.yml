@@ -1,0 +1,42 @@
+# Prometheus configuration for vLLM monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'vllm-turboquant'
+    service: 'gemma4-27b'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - 'alert_rules.yml'
+
+# Scrape configurations
+scrape_configs:
+  - job_name: 'vllm-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['localhost:8000']
+        labels:
+          instance: 'vllm-gemma4-server'
+          model: 'gemma-4-27b'
+          quantization: 'turboquant'
+    scrape_interval: 5s
+    scrape_timeout: 4s
+    
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Remote storage (optional, for long-term metrics)
+# remote_write:
+#   - url: "http://prometheus-remote:9009/api/v1/push"
+#     write_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'vllm_.*'
+#         action: 'keep'
