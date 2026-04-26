@@ -1,4 +1,6 @@
-version: '3.8'
+# Requires: Docker Engine 23+ with NVIDIA Container Toolkit
+# GPU auth:  set VLLM_API_KEY in a .env file or as an env var to enable API key auth
+# Monitoring: docker compose --profile monitoring up
 
 services:
   vllm-gemma4:
@@ -7,37 +9,31 @@ services:
       dockerfile: Dockerfile
     image: vllm-gemma4-turboquant:latest
     container_name: vllm-gemma4-server
-    
-    # GPU support
+
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
       - CUDA_VISIBLE_DEVICES=0
       - VLLM_TARGET_DEVICE=cuda
-      - VLLM_USE_PRECOMPILED=0
-      - VLLM_MAIN_CUDA_VERSION=12.8
       - PYTHONUNBUFFERED=1
       - HF_HOME=/cache
-    
-    # Ports
+      # Model config — override these in a .env file
+      - MODEL_PATH=/models/gemma4-27b-awq
+      - KV_CACHE_DTYPE=turboquant35
+      - GPU_MEMORY_UTIL=0.85
+      - MAX_MODEL_LEN=32768
+      # Set VLLM_API_KEY to enable bearer-token auth; leave empty to disable
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+
     ports:
       - "8000:8000"
-    
-    # Volumes for models and cache
+
     volumes:
-      # Model directory (required)
       - ./models:/models:ro
-      
-      # HuggingFace cache (optional, for new model downloads)
       - ./cache:/cache
-      
-      # Logs
       - ./logs:/logs
-      
-      # Your custom configs (optional)
-      - ./config:/app/config:ro
-    
-    # Resource limits
+      - ../config:/app/config:ro
+
     deploy:
       resources:
         reservations:
@@ -45,46 +41,29 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    
-    # Restart policy
+
     restart: unless-stopped
-    
-    # Health check
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-    
-    # Logging
+      start_period: 120s
+
     logging:
       driver: json-file
       options:
         max-size: "100m"
         max-file: "10"
-        labels: "service=vllm-gemma4"
-    
-    # Additional arguments (override in compose override file)
-    command: >
-      --model /models/gemma4-27b-int8
-      --quantization turboquant
-      --kv-cache-dtype turboquant35
-      --turboquant-metadata-path /models/gemma4-27b-int8/turboquant_kv.json
-      --attention-backend TRITON_ATTN
-      --gpu-memory-utilization 0.85
-      --max-model-len 4096
-      --dtype float16
-      --api-key sk-proj-turboquant-5090
 
-  # Optional: Prometheus monitoring
   prometheus:
     image: prom/prometheus:latest
     container_name: vllm-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -95,14 +74,13 @@ services:
     profiles:
       - monitoring
 
-  # Optional: Grafana dashboards
   grafana:
     image: grafana/grafana:latest
     container_name: vllm-grafana
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
