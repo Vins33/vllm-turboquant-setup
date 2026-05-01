@@ -33,3 +33,5 @@ Thumbs.db
 # Benchmark output
 results/
 output/
+docker/*
+models/

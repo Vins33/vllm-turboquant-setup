@@ -1,0 +1,20 @@
+[project]
+name = "llm-inference-report-tests"
+version = "0.1.0"
+description = "Validation tests derived from llm-inference-stack-report-en.md"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+]

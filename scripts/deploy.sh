@@ -97,10 +97,10 @@ check_model() {
 build_image() {
     print_header "Build Immagine Docker"
     
-    if [ ! -d "vllm-turboquant" ]; then
-        print_error "Directory vllm-turboquant non trovata"
-        print_info "Clonando vllm-turboquant..."
-        git clone https://github.com/mitkox/vllm-turboquant.git
+    if [ ! -d "vllm" ]; then
+        print_error "Directory vllm non trovata"
+        print_info "Clonando vllm..."
+        git clone https://github.com/mitkox/vllm.git
     fi
     
     print_info "Building Docker image: $IMAGE_NAME:$IMAGE_TAG"

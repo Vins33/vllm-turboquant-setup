@@ -7,8 +7,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: vllm-gemma4-turboquant:latest
-    container_name: vllm-gemma4-server
+    image: vllm-gemma3-turboquant:latest
+    container_name: vllm-gemma3-server
 
     runtime: nvidia
     environment:
@@ -16,10 +16,18 @@ services:
       - CUDA_VISIBLE_DEVICES=0
       - VLLM_TARGET_DEVICE=cuda
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/vllm
+      # SM 12.0 (Blackwell/RTX 5090) with CUDA 12.8: bypass FlashInfer's
+      # CUDA >= 12.9 requirement for SM 12.x by providing arch suffix directly.
+      - FLASHINFER_CUDA_ARCH_LIST=12.0f
+      # Disable FlashInfer JIT sampling: SM 12.0 requires CUDA >= 12.9 for nvcc
+      # compilation. Use PyTorch-native top-p/k sampler instead (no quality loss).
+      - VLLM_USE_FLASHINFER_SAMPLER=0
       - HF_HOME=/cache
+      - HF_TOKEN=${HF_TOKEN:-}
       # Model config — override these in a .env file
-      - MODEL_PATH=/models/gemma4-27b-awq
-      - KV_CACHE_DTYPE=turboquant35
+      - MODEL_PATH=/models/gemma-3-27b-it-awq
+      - KV_CACHE_DTYPE=turboquant_k8v4
       - GPU_MEMORY_UTIL=0.85
       - MAX_MODEL_LEN=32768
       # Set VLLM_API_KEY to enable bearer-token auth; leave empty to disable
@@ -29,7 +37,7 @@ services:
       - "8000:8000"
 
     volumes:
-      - ./models:/models:ro
+      - ./models:/models
       - ./cache:/cache
       - ./logs:/logs
       - ../config:/app/config:ro
@@ -41,6 +49,8 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+    command: ["--max-num-batched-tokens", "4096"]
 
     restart: unless-stopped
 

@@ -1,0 +1,8 @@
+# Test dependencies for report_validation_tests.py
+# Install with: uv pip install -r requirements.txt
+
+# HTTP requests (stdlib urllib used in tests, requests for convenience)
+requests>=2.32.0
+
+# No other runtime deps — tests use only Python stdlib:
+#   csv, math, time, os, sys, urllib, json

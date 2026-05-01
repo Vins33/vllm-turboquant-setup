@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-MODEL_PATH="${MODEL_PATH:-/models/gemma4-27b-awq}"
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-turboquant35}"
+MODEL_PATH="${MODEL_PATH:-/models/gemma-3-27b-it-awq}"
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-turboquant_k8v4}"
 GPU_MEMORY_UTIL="${GPU_MEMORY_UTIL:-0.85}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-32768}"
 
@@ -28,12 +28,11 @@ fi
 # shellcheck disable=SC2086
 exec python -m vllm.entrypoints.openai.api_server \
     --model "${MODEL_PATH}" \
-    --attention-backend TRITON_ATTN \
     --kv-cache-dtype "${KV_CACHE_DTYPE}" \
-    --enable-turboquant \
     ${META_FLAG} \
     --gpu-memory-utilization "${GPU_MEMORY_UTIL}" \
     --max-model-len "${MAX_MODEL_LEN}" \
+    --enforce-eager \
     --enable-chunked-prefill \
     --enable-prefix-caching \
     --tensor-parallel-size 1 \

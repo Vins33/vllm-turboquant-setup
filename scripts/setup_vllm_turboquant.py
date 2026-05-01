@@ -126,17 +126,17 @@ def install_vllm() -> bool:
     print_header("FASE 2: Installare vLLM da Sorgente")
     
     # Check if vllm repo exists
-    if not os.path.exists("vllm-turboquant"):
-        print_info("Clonando vllm-turboquant repository...")
+    if not os.path.exists("vllm_project_dir"):
+        print_info("Clonando vllm_project_dir repository...")
         if not run_command(
-            "git clone https://github.com/mitkox/vllm-turboquant.git",
-            "Clone vllm-turboquant"
+            "git clone https://github.com/vllm-project/vllm.git",
+            "Clone vllm_project_dir"
         ):
             return False
     else:
-        print_info("Repository vllm-turboquant già presente")
+        print_info("Repository vllm_project_dir già presente")
     
-    os.chdir("vllm-turboquant")
+    os.chdir("vllm_project_dir")
     
     # Activate venv and install
     venv_activate = ". ../vllm_env/bin/activate && "
@@ -266,7 +266,7 @@ def generate_turboquant_metadata() -> bool:
     venv_activate = ". vllm_env/bin/activate && "
     
     metadata_script = """
-cd vllm-turboquant
+cd vllm_project_dir
 python benchmarks/generate_turboquant_metadata.py \\
     --target-model ../models/gemma4-27b-int8 \\
     --calibration-model google/gemma-4-27b \\
@@ -303,7 +303,7 @@ echo "   Modello: Gemma-4 27B"
 echo "   Quantizzazione: TurboQuantum INT8"
 echo "   GPU: RTX 5090"
 
-cd vllm-turboquant
+cd vllm_project_dir
 
 python -m vllm.entrypoints.openai.api_server \\
     --model ../models/gemma4-27b-int8 \\
@@ -330,7 +330,7 @@ python -m vllm.entrypoints.openai.api_server \\
     test_script = """#!/usr/bin/env python3
 '''Test script for vLLM inference'''
 import sys
-sys.path.insert(0, 'vllm-turboquant')
+sys.path.insert(0, 'vllm_project_dir')
 
 from vllm import LLM, SamplingParams
 import time
@@ -385,7 +385,7 @@ print(f"📈 Throughput: {len(prompts)/elapsed:.2f} prompt/sec")
     benchmark_script = """#!/usr/bin/env python3
 '''Benchmark script for TurboQuantum performance'''
 import sys
-sys.path.insert(0, 'vllm-turboquant')
+sys.path.insert(0, 'vllm_project_dir')
 
 from vllm import LLM, SamplingParams
 import time
@@ -503,7 +503,7 @@ bash scripts/test_api.sh
 
 ```
 ├── vllm_env/                    # Virtual environment
-├── vllm-turboquant/             # vLLM source code
+├── vllm_project_dir/             # vLLM source code
 ├── models/
 │   └── gemma4-27b-int8/        # Quantized model
 ├── scripts/
