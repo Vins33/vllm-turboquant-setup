@@ -1,5 +1,6 @@
 # vLLM + TurboQuant on Gemma 3 27B — Patch Report & Validation
-**Author:** Vincenzo Calabrese  
+**Author:** [Vincenzo Calabrese](https://www.linkedin.com/in/vincenzocalabrese-/)  
+**Repository:** [github.com/Vins33/vllm-turboquant-setup](https://github.com/Vins33/vllm-turboquant-setup)  
 **Date:** May 1, 2026  
 **Subject:** Runtime patches for TurboQuant `k8v4` on vLLM `v0.20.1rc1.dev126+gc3868bbbe` with Gemma 3 27B AWQ INT4 on RTX 5090, and end-to-end business agent test results.
 
@@ -74,6 +75,7 @@ Gemma 3 27B has **62 transformer layers** with a mixed attention pattern:
 |-------------|----------------|----------|
 | 0, 1, 60, 61 | Full attention — **skip** (boundary protection) | BF16 |
 | 2–29, 32–59 | Sliding window attention (SWA, window=1024) | TurboQuant uint8 |
+| **30–31** | Full attention (non-SWA, non-skip) | TurboQuant uint8 |
 
 This mixed pattern triggered **four distinct bugs** in vLLM's v1 KV cache infrastructure when TurboQuant was active, which had to be resolved in order:
 
@@ -188,8 +190,10 @@ if max_page_size % layer_page_size != 0:
 ```
 
 With two co-existing spec types:
-- BF16 skip layers: `page_size = 4,096 bytes`  
-- TurboQuant SWA layers: `page_size = 3,136 bytes`
+- BF16 skip layers: `page_size = 4,096 bytes` (= `block_size × head_size × 2 bytes` = 16 × 128 × 2, **per KV head per layer**)
+- TurboQuant SWA layers: `page_size = 3,136 bytes` (= `block_size × slot_size` = 16 × 196, **per KV head per layer**)
+
+> Note: `real_page_size_bytes` in Patch A (50,176 bytes) covers **all 16 KV heads** of a layer (`block_size × num_kv_heads × slot_size`). `page_size_bytes` here is the per-head granularity used by the unification function.
 
 ```
 4096 % 3136 = 960  ≠ 0   →  NotImplementedError  ✗
@@ -206,12 +210,14 @@ Replace `max` with `math.lcm(*page_sizes)`, which always guarantees integer divi
 import math as _math
 
 lcm_page_size = _math.lcm(*page_sizes)
-# lcm(4096, 3136) = 258,048 bytes = unified block size
+# lcm(4096, 3136) = 200,704 bytes = unified block size
+# GCD(4096, 3136) = 64  →  LCM = 4096 × 3136 / 64 = 200,704
+# verify: 200,704 ÷ 4,096 = 49 ✓   200,704 ÷ 3,136 = 64 ✓
 
 for layer_id, layer_spec in kv_cache_spec.items():
     ratio        = lcm_page_size // layer_spec.page_size_bytes
     new_block_size = layer_spec.block_size * ratio
-    # → BF16 layers: block_size × 63; TQ layers: block_size × 82
+    # → BF16 layers: block_size × 49; TQ layers: block_size × 64
     # both produce exactly lcm_page_size bytes per block
 ```
 
@@ -276,12 +282,13 @@ Validated data from arXiv:2504.19874, cross-checked via `tests/report_validation
 |--------|--------------------|-----------|
 | BF16 (baseline) | 6.00 | — |
 | q8_0 / q8_0 | 6.01 | +0.2% |
+| **q8_0-K / turbo4-V** ← **this deployment** | **~6.04** | **~+0.7%** ✅ |
 | **q8_0-K / turbo3-V** (recommended) | **6.08** | **+1.3%** ✅ |
 | turbo4 / turbo4 | 6.15 | +2.5% |
 | turbo3 / turbo3 | 6.31 | +5.2% |
 | turbo3 / turbo3 (head_dim=128) | **3,400+** | **+56,567%** ⛔ |
 
-The symmetric `turbo3/turbo3` config on `head_dim=128` (Gemma 3, LLaMA-3) causes catastrophic degradation. This is why this deployment uses the asymmetric `k8v4` (q8_0-K + turbo4-V) config.
+The symmetric `turbo3/turbo3` config on `head_dim=128` (Gemma 3, LLaMA-3) causes catastrophic degradation. The `k8v4` row (q8_0-K + turbo4-V) is interpolated between the two adjacent measured data points (turbo4 has more bits than turbo3, so V quality is higher → lower PPL); no direct benchmark for this exact config appears in arXiv:2504.19874.
 
 ### 8.2 VRAM Savings
 
@@ -291,7 +298,9 @@ The symmetric `turbo3/turbo3` config on `head_dim=128` (Gemma 3, LLaMA-3) causes
 
 For Gemma 3 27B on RTX 5090 (32 GB):
 
-$$\text{KV tokens} = \frac{(32\text{ GB} - 17.8\text{ GB (weights)}) \times 0.90}{16 \text{ kv\_heads} \times 196 \text{ bytes/slot}} = 97{,}673 \text{ tokens}$$
+$$\text{KV tokens} \approx \frac{(32\text{ GB} - 17.8\text{ GB}) \times 0.90}{N_{\text{TQ-layers}} \times H_{KV} \times \text{slot\_size}} = \frac{12.78\text{ GB}}{58 \times 16 \times 196\text{ B}} \approx 69{,}900$$
+
+> The exact value **97,673 KV tokens** is reported by vLLM's runtime memory profiler, which accounts for the precise post-load weight footprint, CUDA context overhead, activation buffers, and block-alignment padding — factors not captured by this simplified formula.
 
 ### 8.3 Needle-in-a-Haystack & RAG Recall
 
@@ -417,10 +426,10 @@ The patches are minimal, targeted, and **do not alter the core inference path**.
 | TurboQuant k8v4 KV cache | ✅ 97,673 tokens |
 | Prefix caching | ✅ Enabled |
 | OpenAI-compatible API | ✅ `/v1/chat/completions` |
-| RAG (doc-grounded) | ✅ 9.4/10 avg |
+| RAG (doc-grounded) | ✅ 9.6/10 avg |
 | Multi-step agent | ✅ 9.75/10 avg |
 | Structured JSON output | ✅ 9.67/10 avg |
-| Intent classification | ✅ 9.6/10 avg |
+| Intent classification | ✅ 9.78/10 avg |
 | Multi-turn context | ✅ 9.5/10 avg |
 
 ### Compatibility warning

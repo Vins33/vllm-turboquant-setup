@@ -2,7 +2,7 @@
 
 **vLLM `v0.20.1rc1.dev126+gc3868bbbe` · TurboQuant `k8v4` KV cache · Gemma 3 27B-IT AWQ INT4 · NVIDIA RTX 5090 32 GB**
 
-> Status: **fully operational** — server running, 97,673 token KV cache, 97% test pass rate over 10 stability runs.
+**Author:** [Vincenzo Calabrese](https://www.linkedin.com/in/vincenzocalabrese-/) · **Repo:** [github.com/Vins33/vllm-turboquant-setup](https://github.com/Vins33/vllm-turboquant-setup)
 
 ---
 
