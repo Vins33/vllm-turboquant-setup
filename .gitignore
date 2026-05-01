@@ -35,3 +35,4 @@ results/
 output/
 docker/*
 models/
+tests/*
